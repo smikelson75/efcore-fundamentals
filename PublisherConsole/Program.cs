@@ -21,8 +21,14 @@ QueryFilter();
 AddSomeMoreAuthors();
 SkipAndTakeAuthors();
 SortAuthors();
+RetrieveAndUpdateAuthor();
+RetrieveAndUpdateMultipleAuthors();
+CoordinatedRetrieveAndUpdateAuthor();
+DeleteAnAuthor();
+InsertMultipleAuthors();
 
 void AddAuthor() {
+    // See https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/classes-and-structs/object-and-collection-initializers
     var author = new Author { FirstName = "Josie", LastName = "Newf" };
 
     // See https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/using-statement
@@ -142,3 +148,125 @@ void SortAuthors() {
         Console.WriteLine($"{author.LastName}, {author.FirstName}");
     }
 }
+
+void RetrieveAndUpdateAuthor() {
+    using var context = new PubContext();
+    // Query the database to get the first instance of the author
+    // This adds Tracking data into EF Core
+    var author = context.Authors.FirstOrDefault(a => a.FirstName == "Julie" && a.LastName == "Lerman");
+
+    // If data returns from the call, update the first name to Julia (row is modifed) and save the changes. 
+    // Otherwise, do nothing.
+    if (author != null) {
+        author.FirstName = "Julia";
+        context.SaveChanges();
+    }
+}
+
+void RetrieveAndUpdateMultipleAuthors() {
+    using var context = new PubContext();
+    // Returns all authors with a last name of Lerman (3)
+    var authors = context.Authors.Where(a => a.LastName == "Lerman").ToList();
+
+    // Walk through each author and update the name to "Lehrman"
+    foreach (var author in authors) {
+        author.LastName = "Lehrman";
+    }
+
+    // Show existing change tracker using debugging, review for changes, then display
+    // the result using the debugging view
+    Console.WriteLine("Before:" + context.ChangeTracker.DebugView.ShortView);
+    context.ChangeTracker.DetectChanges();
+    Console.WriteLine("After:" + context.ChangeTracker.DebugView.ShortView);
+
+    // Finally, send the updated Last Name to the database
+    context.SaveChanges();
+}
+
+#region UpdatingUntrackedObjects
+void CoordinatedRetrieveAndUpdateAuthor() {
+    // Call to get the author Object
+    var author = FindTheAuthor(3);
+
+    // if the author is returned and the FirstName equals "Julie"
+    if (author?.FirstName == "Julie") {
+        // Update the author FirstName to "Julia"
+        // Make the call to save the Author Object
+        author.FirstName = "Julia";
+        SaveTheAuthor(author);
+    }
+}
+Author FindTheAuthor(int authorId) {
+    // context only exists within the function and gets disposed of
+    // after function falls out of scope.
+    using var context = new PubContext();
+    return context.Authors.Find(authorId);
+}
+
+void SaveTheAuthor(Author author) {
+    // Same here. The context is built within the function. And doesn't know
+    // the author is previously existing
+    using var context = new PubContext();
+    // Explicitly tells the context to added as a modified value
+    context.Authors.Update(author);
+    // During the DetectChanges() call, an update is generated instead of an Insert
+    // However, in this context, the entire row is sent for update because the context
+    // doesn't know which field was updated.
+    context.SaveChanges();
+}
+#endregion
+
+void DeleteAnAuthor() {
+    using var context = new PubContext();
+    // Retrieve the existing author to remove
+    var author = context.Authors.Find(3);
+
+    // If the author was return... Otherwise, do nothing.
+    if (author != null) {
+        // notify the context that this author
+        // should be Removed then save the changes. In this case the author has no
+        // associated Book relationship (will cause an Exception if it did).  
+        context.Authors.Remove(author);
+        context.SaveChanges();
+    }
+}
+
+void InsertMultipleAuthors() {
+    using var context = new PubContext();
+
+    // Create a new Array of Authors
+    var authorList = new Author[] {
+        new Author { FirstName = "Ruth", LastName = "Ozeki" },
+        new Author { FirstName = "Sofia", LastName = "Segovia" },
+        new Author { FirstName = "Ursula K.", LastName = "LeGuin"},
+        new Author { FirstName = "Hugh", LastName = "Howey"},
+        new Author { FirstName = "Isabelle", LastName = "Allende"}
+    };
+
+    // Add the new Array of Authors
+    context.Authors.AddRange(authorList);
+    
+    // Store listing of Authors. No performance advantage over AddSomeMoreAuthors()
+    context.SaveChanges();
+}
+
+#region InsertMultipleAuthorsUsingGenericList
+void CoordinateNewAuthors() {
+    // See https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/tutorials/list-collection
+    var authorList = new List<Author> {
+        new Author { FirstName = "Ruth", LastName = "Ozeki" },
+        new Author { FirstName = "Sofia", LastName = "Segovia" },
+        new Author { FirstName = "Ursula K.", LastName = "LeGuin"},
+        new Author { FirstName = "Hugh", LastName = "Howey"},
+        new Author { FirstName = "Isabelle", LastName = "Allende"}
+    };
+
+    InsertMultipleAuthorsPassedIn(authorList);
+}
+
+void InsertMultipleAuthorsPassedIn(List<Author> listOfAuthors) {
+    using var context = new PubContext();
+    context.Authors.AddRange(listOfAuthors);
+    context.SaveChanges();
+}
+#endregion
